@@ -10,7 +10,7 @@
 //   wget https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
 //   wget https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h
 //
-// Compilar: gcc -o img img_base.c -pthread -lm
+// Compilar: gcc -o img main.c -pthread -lm
 // Ejecutar: ./img [ruta_imagen.png]
 
 #include <stdio.h>
