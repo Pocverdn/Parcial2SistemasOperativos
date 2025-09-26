@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
+#define _USE_MATH_DEFINES // PI
 #include <math.h>
 
 // QUÉ: Incluir bibliotecas stb para cargar y guardar imágenes PNG.
@@ -192,6 +193,17 @@ typedef struct {
     int delta;
 } BrilloArgs;
 
+
+typedef struct {
+    int inicio;
+    int fin;
+    int ancho;           // Ancho de la imagen en píxeles
+    int canales;         // 1 (escala de grises) o 3 (RGB)
+    unsigned char*** pixeles; // Matriz 3D: [alto][ancho][canales]
+    float angulo;
+} RotarArgs;
+
+
 // QUÉ: Ajustar brillo en un rango de filas (para hilos).
 // CÓMO: Suma delta a cada canal de cada píxel, con clamp entre 0-255.
 // POR QUÉ: Procesa píxeles en paralelo para demostrar concurrencia.
@@ -249,6 +261,85 @@ void ajustarBrilloConcurrente(ImagenInfo* info, int delta) {
            info->canales == 1 ? "grises" : "RGB");
 }
 
+// QUÉ: Rotar la matriz de píceles (primeras 10 filas)
+// CÓMO: Rotandola
+// POR QUÉ: El profe lo pidio
+void* rotarImagenHilo(void* args) {
+
+    RotarArgs* rArgs = (RotarArgs*)args;
+
+    float radianes = rArgs->angulo * (M_PI/180);
+
+    float cose = cos(radianes);
+    float sen = sin(radianes);
+
+    float centroX = rArgs->ancho / 2;
+    float centroY = rArgs->fin / 2;
+
+
+
+    // Creo una copia de la imagen
+    unsigned char*** copia = malloc(rArgs->fin * sizeof(unsigned char**));
+    for (int y = rArgs->inicio; y < rArgs->fin; y++) {
+        copia[y] = malloc(rArgs->ancho * sizeof(unsigned char*));
+        for (int x = 0; x < rArgs->ancho; x++) {
+            copia[y][x] = malloc(rArgs->canales * sizeof(unsigned char));
+            for (int c = 0; c < rArgs->canales; c++) {
+                copia[y][x][c] = rArgs->pixeles[y][x][c];
+            }
+        }
+    }
+
+    for (int y = rArgs->inicio; y < rArgs->fin; y++) {
+        for (int x = 0; x < rArgs->ancho; x++) {
+            float xt = x - centroX;
+            float yt = y - centroY;
+
+            int xr = (int) round(xt * cose - yt * sen + centroX);
+            int yr = (int) round(xt * sen + yt * cose + centroY);
+
+            for (int c = 0; c < rArgs->canales; c++) {
+                if (xr >= 0 && xr < rArgs->ancho && yr >= 0 && yr < rArgs->fin) {
+                    rArgs->pixeles[y][x][c] = copia[yr][xr][c];
+                } else {
+                    rArgs->pixeles[y][x][c] = 0; // negro
+                }
+            }
+        }
+    }
+
+    return NULL;
+
+    
+}
+
+void rotarImagenConcurrente(ImagenInfo* info, float angulo){
+    if (!info->pixeles) {
+        printf("No hay imagen cargada.\n");
+        return;
+    }
+
+    const int numHilos = 2; // QUÉ: Número fijo de hilos para simplicidad.
+    pthread_t hilos[numHilos];
+    RotarArgs args[numHilos];
+    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
+
+    for (int i = 0; i < numHilos; i++) {
+        args[i].pixeles = info->pixeles;
+        args[i].inicio = i * filasPorHilo;
+        args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
+        args[i].ancho = info->ancho;
+        args[i].canales = info->canales;
+        args[i].angulo = angulo;
+
+        printf("Angulo: %f \n", args[i].angulo);
+        if (pthread_create(&hilos[i], NULL, rotarImagenHilo, &args[i]) != 0) {
+            fprintf(stderr, "Error al crear hilo %d\n", i);
+            return;
+        }
+    }
+}
+
 // QUÉ: Mostrar el menú interactivo.
 // CÓMO: Imprime opciones y espera entrada del usuario.
 // POR QUÉ: Proporciona una interfaz simple para interactuar con el programa.
@@ -258,7 +349,8 @@ void mostrarMenu() {
     printf("2. Mostrar matriz de píxeles\n");
     printf("3. Guardar como PNG\n");
     printf("4. Ajustar brillo (+/- valor) concurrentemente\n");
-    printf("5. Salir\n");
+    printf("5. Rotar imagen concurrentemente\n");
+    printf("6. Salir\n");
     printf("Opción: ");
 }
 
@@ -332,7 +424,20 @@ int main(int argc, char* argv[]) {
                 ajustarBrilloConcurrente(&imagen, delta);
                 break;
             }
-            case 5: // Salir
+            case 5: { // rotar imagen
+                float angulo;
+                printf("Valor en grados del angulo al cual quiere rotar su imagen: ");
+                if (scanf("%f", &angulo) != 1) {
+                    while (getchar() != '\n');
+                    printf("Entrada inválida.\n");
+                    continue;
+                }
+
+                while (getchar() != '\n');
+                rotarImagenConcurrente(&imagen, angulo);
+                break;
+            }
+            case 6: // Salir
                 liberarImagen(&imagen);
                 printf("¡Adiós!\n");
                 return EXIT_SUCCESS;
