@@ -198,6 +198,7 @@ typedef struct {
     int inicio;
     int fin;
     int ancho;           // Ancho de la imagen en píxeles
+    int alto;
     int canales;         // 1 (escala de grises) o 3 (RGB)
     unsigned char*** pixeles; // Matriz 3D: [alto][ancho][canales]
     float angulo;
@@ -274,13 +275,11 @@ void* rotarImagenHilo(void* args) {
     float sen = sin(radianes);
 
     float centroX = rArgs->ancho / 2;
-    float centroY = rArgs->fin / 2;
-
-
+    float centroY = rArgs->alto / 2;
 
     // Creo una copia de la imagen
-    unsigned char*** copia = malloc(rArgs->fin * sizeof(unsigned char**));
-    for (int y = rArgs->inicio; y < rArgs->fin; y++) {
+    unsigned char*** copia = malloc(rArgs->alto * sizeof(unsigned char**));
+    for (int y = 0; y < rArgs->alto; y++) {
         copia[y] = malloc(rArgs->ancho * sizeof(unsigned char*));
         for (int x = 0; x < rArgs->ancho; x++) {
             copia[y][x] = malloc(rArgs->canales * sizeof(unsigned char));
@@ -299,7 +298,7 @@ void* rotarImagenHilo(void* args) {
             int yr = (int) round(xt * sen + yt * cose + centroY);
 
             for (int c = 0; c < rArgs->canales; c++) {
-                if (xr >= 0 && xr < rArgs->ancho && yr >= 0 && yr < rArgs->fin) {
+                if (xr >= 0 && xr < rArgs->ancho && yr >= 0 && yr < rArgs->alto) {
                     rArgs->pixeles[y][x][c] = copia[yr][xr][c];
                 } else {
                     rArgs->pixeles[y][x][c] = 0; // negro
@@ -329,15 +328,23 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
         args[i].inicio = i * filasPorHilo;
         args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
         args[i].ancho = info->ancho;
+        args[i].alto = info->alto;
         args[i].canales = info->canales;
         args[i].angulo = angulo;
 
-        printf("Angulo: %f \n", args[i].angulo);
         if (pthread_create(&hilos[i], NULL, rotarImagenHilo, &args[i]) != 0) {
             fprintf(stderr, "Error al crear hilo %d\n", i);
             return;
         }
     }
+
+    
+
+    for (int i = 0; i < numHilos; i++) {
+        pthread_join(hilos[i], NULL);
+    }
+    printf("Rotación ajustada concurrentemente con %d hilos (%s).\n", numHilos,
+           info->canales == 1 ? "grises" : "RGB");
 }
 
 // QUÉ: Mostrar el menú interactivo.
