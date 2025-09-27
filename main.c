@@ -278,11 +278,11 @@ void* rotarImagenHilo(void* args) {
     float centroY = rArgs->alto / 2;
 
     // Creo una copia de la imagen
-    unsigned char*** copia = malloc(rArgs->alto * sizeof(unsigned char**));
+    unsigned char*** copia = (unsigned char***) malloc(rArgs->alto * sizeof(unsigned char**));
     for (int y = 0; y < rArgs->alto; y++) {
-        copia[y] = malloc(rArgs->ancho * sizeof(unsigned char*));
+        copia[y] = (unsigned char**) malloc(rArgs->ancho * sizeof(unsigned char*));
         for (int x = 0; x < rArgs->ancho; x++) {
-            copia[y][x] = malloc(rArgs->canales * sizeof(unsigned char));
+            copia[y][x] = (unsigned char*) malloc(rArgs->canales * sizeof(unsigned char));
             for (int c = 0; c < rArgs->canales; c++) {
                 copia[y][x][c] = rArgs->pixeles[y][x][c];
             }
