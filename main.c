@@ -366,10 +366,15 @@ void* escalarHilo (void* args) {
     int nuevoAncho = scale->ancho*ceil(scale->scale);
     int x_in, y_in;
     for(int i = 0; i < nuevoAlto; i++) {
+        printf("una vuelta de i \n");
         for(int j = 0; j < nuevoAncho; j++) {
+            //printf("una vuelta de j \n");
             x_in = round((float)j / scale->scale);
             y_in = round((float)i / scale->scale);
-            scale->pixeles[scale->ancho * i + j] = scale->pixelesViejos[scale->ancho * y_in + x_in];
+            for (int c = 0; c < scale->canales; c++) {   
+                scale->pixeles[i][j][c] = scale->pixelesViejos[y_in][x_in][c];
+            }
+            
         }
     }
     return NULL; 
@@ -382,14 +387,14 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
         return;
     }
 
-    const int numHilos = 2; // QUÉ: Número fijo de hilos para simplicidad.
+    const int numHilos = 1; // QUÉ: Número fijo de hilos para simplicidad.
     pthread_t hilos[numHilos];
     EscalarArgs args[numHilos];
     int filasPorHilo = (int)ceil((double)info->alto / numHilos);
 
     for (int i = 0; i < numHilos; i++) {
         args[i].pixelesViejos = info->pixeles;
-        args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)*ceil(scale));
+        args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)*ceil(scale)); 
         args[i].inicio = i * filasPorHilo;
         args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
         args[i].ancho = info->ancho;
