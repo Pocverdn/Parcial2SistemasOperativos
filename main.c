@@ -272,6 +272,7 @@ void ajustarBrilloConcurrente(ImagenInfo* info, int delta) {
            info->canales == 1 ? "grises" : "RGB");
 }
 
+
 // QUÉ: Rotar la matriz de píceles (primeras 10 filas)
 // CÓMO: Rotandola
 // POR QUÉ: El profe lo pidio
@@ -323,7 +324,6 @@ void* rotarImagenHilo(void* args) {
 }
 
 
-
 void rotarImagenConcurrente(ImagenInfo* info, float angulo){
     if (!info->pixeles) {
         printf("No hay imagen cargada.\n");
@@ -359,6 +359,9 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
            info->canales == 1 ? "grises" : "RGB");
 }
 
+// QUÉ: Escalar la matriz de píceles (primeras 10 filas)
+// CÓMO: Escalandola
+// POR QUÉ: El profe lo pidio
 void* escalarHilo (void* args) {
     EscalarArgs* scale = (EscalarArgs*)args;
     unsigned char *tempin, *tempout;
@@ -417,6 +420,70 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
            info->canales == 1 ? "grises" : "RGB");
 }
 
+float* crearKernel(int size, float sigma){
+    int mitad = size / 2;
+    float *kernel = malloc(sizeof(float) * size*size);
+
+    float sum = 0;
+    float s2 = 2 * sigma * sigma;
+
+    for(int x = -mitad; x <= mitad; x++){
+        for(int y = -mitad; y <= mitad; y++){
+            float v = exp(-(x*x + y*y) / s2);
+            kernel[(x+mitad)*size + (y+mitad)] = v;
+            sum += v;
+        }
+    }
+
+    // Normalizar
+    for (int i = 0; i < size*size; i++) {
+        kernel[i] /= sum;
+    }
+
+    return kernel;
+}
+
+// Función para detectar bordes y no se salga de los límites de la imagen
+static inline int clamp_i(int v, int a, int b) {
+    if (v < a) return a;
+    if (v > b) return b;
+    return v;
+}
+
+// QUÉ: Suavizar la matriz de píceles (primeras 10 filas)
+// CÓMO: Suavizandola
+// POR QUÉ: El profe lo pidio
+void *suavizarConcurrente(ImagenInfo* info, int size, float sigma){
+    int mitad = size / 2;
+
+    float *kernel = crearKernel(size, sigma);
+
+    for(int x = 0; x < info->alto; x++){
+        for (int y = 0; y < info->ancho; y++){
+            for (int c = 0; c < info->canales; c++){
+
+                double suma = 0;
+
+                for (int i = -mitad; i <= mitad; i++){
+                    int xi = clamp_i(x + i, 0, info->alto - 1);
+
+                    for (int j = -mitad; j <= mitad; j++){
+                        int yj = clamp_i(y + j, 0, info->ancho - 1);
+
+                        suma += info->pixeles[xi][yj][c] * kernel[(i + mitad) * size + (j + mitad)];
+                    }
+                }
+
+                if (suma < 0) suma = 0;
+                if (suma > 255) suma = 255;
+
+                info->pixeles[x][y][c] = (unsigned char) round(suma);
+
+            }
+        }
+    }
+}
+
 // QUÉ: Mostrar el menú interactivo.
 // CÓMO: Imprime opciones y espera entrada del usuario.
 // POR QUÉ: Proporciona una interfaz simple para interactuar con el programa.
@@ -427,8 +494,9 @@ void mostrarMenu() {
     printf("3. Guardar como PNG\n");
     printf("4. Ajustar brillo (+/- valor) concurrentemente\n");
     printf("5. Rotar imagen concurrentemente\n");
-    printf("6. escalar imagen concurrentemente\n");
-    printf("7. Salir\n");
+    printf("6. Escalar imagen concurrentemente\n");
+    printf("7. Suavizar Imagen concurrentemente\n");
+    printf("8. Salir\n");
     printf("Opción: ");
 }
 
@@ -515,7 +583,7 @@ int main(int argc, char* argv[]) {
                 rotarImagenConcurrente(&imagen, angulo);
                 break;
             }
-            case 6: { // rotar imagen
+            case 6: { // escalar imagen
                 float escala;
                 printf("Valor en porcentage cual quiere escalar su imagen: ");
                 if (scanf("%f", &escala) != 1) {
@@ -527,8 +595,38 @@ int main(int argc, char* argv[]) {
                 while (getchar() != '\n');
                 escalarImagenConcurrente(&imagen, escala);
                 break;
+            }
+            case 7: { // suavizar imagen
+                int size;
+                float sigma;
+
+                printf("Tamaño del kernel gaussiano: ");
+                if (scanf("%i", &size) != 1) {
+                    while (getchar() != '\n');
+                    printf("Entrada inválida.\n");
+                    continue;
+                }
+
+                if(size % 2 == 0){
+                    printf("El tamaño del kernel debe ser impar.\n");
+                    continue;
+                }
+
+                printf("Sigma del kernel gaussiano: ");
+                if (scanf("%f", &sigma) != 1) {
+                    while (getchar() != '\n');
+                    printf("Entrada inválida.\n");
+                    continue;
+                }
+
+                while (getchar() != '\n');
+                suavizarConcurrente(&imagen, size, sigma);
+
+                
+
+                break;
             }            
-            case 7: // Salir
+            case 8: // Salir
                 liberarImagen(&imagen);
                 printf("¡Adiós!\n");
                 return EXIT_SUCCESS;
