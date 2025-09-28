@@ -36,8 +36,8 @@
 typedef struct {
     int ancho;           // Ancho de la imagen en píxeles
     int alto;            // Alto de la imagen en píxeles
-    int canales;         // 1 (escala de grises) o 3 (RGB)
-    unsigned char*** pixeles; // Matriz 3D: [alto][ancho][canales]
+    int canales;         // 1 (escala de grises) o 3 (RGB)// Matriz 3D: [alto][ancho][canales]
+    unsigned char*** pixeles;
 } ImagenInfo;
 
 // QUÉ: Liberar memoria asignada para la imagen.
@@ -204,6 +204,16 @@ typedef struct {
     float angulo;
 } RotarArgs;
 
+typedef struct {
+    int inicio;
+    int fin;
+    int ancho;           // Ancho de la imagen en píxeles
+    int alto;
+    int canales;         // 1 (escala de grises) o 3 (RGB)
+    unsigned char*** pixeles; // Matriz 3D: [alto][ancho][canales]
+    unsigned char*** pixelesViejos; 
+    float scale;
+} EscalarArgs;
 
 // QUÉ: Ajustar brillo en un rango de filas (para hilos).
 // CÓMO: Suma delta a cada canal de cada píxel, con clamp entre 0-255.
@@ -312,6 +322,8 @@ void* rotarImagenHilo(void* args) {
     
 }
 
+
+
 void rotarImagenConcurrente(ImagenInfo* info, float angulo){
     if (!info->pixeles) {
         printf("No hay imagen cargada.\n");
@@ -347,6 +359,59 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
            info->canales == 1 ? "grises" : "RGB");
 }
 
+void* escalarHilo (void* args) {
+    EscalarArgs* scale = (EscalarArgs*)args;
+    unsigned char *tempin, *tempout;
+    int nuevoAlto = scale->alto*ceil(scale->scale);
+    int nuevoAncho = scale->ancho*ceil(scale->scale);
+    int x_in, y_in;
+    for(int i = 0; i < nuevoAlto; i++) {
+        for(int j = 0; j < nuevoAncho; j++) {
+            x_in = round((float)j / scale->scale);
+            y_in = round((float)i / scale->scale);
+            scale->pixeles[scale->ancho * i + j] = scale->pixelesViejos[scale->ancho * y_in + x_in];
+        }
+    }
+    return NULL; 
+
+}
+
+void escalarImagenConcurrente(ImagenInfo* info, float scale){
+    if (!info->pixeles) {
+        printf("No hay imagen cargada.\n");
+        return;
+    }
+
+    const int numHilos = 2; // QUÉ: Número fijo de hilos para simplicidad.
+    pthread_t hilos[numHilos];
+    EscalarArgs args[numHilos];
+    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
+
+    for (int i = 0; i < numHilos; i++) {
+        args[i].pixelesViejos = info->pixeles;
+        args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)*ceil(scale));
+        args[i].inicio = i * filasPorHilo;
+        args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
+        args[i].ancho = info->ancho;
+        args[i].alto = info->alto;
+        args[i].canales = info->canales;
+        args[i].scale = scale;
+
+        if (pthread_create(&hilos[i], NULL, escalarHilo, &args[i]) != 0) {
+            fprintf(stderr, "Error al crear hilo %d\n", i);
+            return;
+        }
+    }
+
+    
+
+    for (int i = 0; i < numHilos; i++) {
+        pthread_join(hilos[i], NULL);
+    }
+    printf("Rotación ajustada concurrentemente con %d hilos (%s).\n", numHilos,
+           info->canales == 1 ? "grises" : "RGB");
+}
+
 // QUÉ: Mostrar el menú interactivo.
 // CÓMO: Imprime opciones y espera entrada del usuario.
 // POR QUÉ: Proporciona una interfaz simple para interactuar con el programa.
@@ -357,7 +422,8 @@ void mostrarMenu() {
     printf("3. Guardar como PNG\n");
     printf("4. Ajustar brillo (+/- valor) concurrentemente\n");
     printf("5. Rotar imagen concurrentemente\n");
-    printf("6. Salir\n");
+    printf("6. escalar imagen concurrentemente\n");
+    printf("7. Salir\n");
     printf("Opción: ");
 }
 
@@ -444,7 +510,20 @@ int main(int argc, char* argv[]) {
                 rotarImagenConcurrente(&imagen, angulo);
                 break;
             }
-            case 6: // Salir
+            case 6: { // rotar imagen
+                float escala;
+                printf("Valor en porcentage cual quiere escalar su imagen: ");
+                if (scanf("%f", &escala) != 1) {
+                    while (getchar() != '\n');
+                    printf("Entrada inválida.\n");
+                    continue;
+                }
+
+                while (getchar() != '\n');
+                escalarImagenConcurrente(&imagen, escala);
+                break;
+            }            
+            case 7: // Salir
                 liberarImagen(&imagen);
                 printf("¡Adiós!\n");
                 return EXIT_SUCCESS;
