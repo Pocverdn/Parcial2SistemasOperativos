@@ -215,6 +215,17 @@ typedef struct {
     float scale;
 } EscalarArgs;
 
+typedef struct {
+    unsigned char*** pixeles;
+    int inicio;
+    int fin;
+    int ancho;
+    int alto;
+    int canales;
+    int size;
+    float sigma;
+} SuaveArgs;
+
 // QUÉ: Ajustar brillo en un rango de filas (para hilos).
 // CÓMO: Suma delta a cada canal de cada píxel, con clamp entre 0-255.
 // POR QUÉ: Procesa píxeles en paralelo para demostrar concurrencia.
@@ -458,37 +469,78 @@ static inline int clamp_i(int v, int a, int b) {
 // QUÉ: Suavizar la matriz de píceles (primeras 10 filas)
 // CÓMO: Suavizandola
 // POR QUÉ: El profe lo pidio
-void *suavizarConcurrente(ImagenInfo* info, int size, float sigma){
-    int mitad = size / 2;
+void *suavizarHilo(void* args){
 
-    float *kernel = crearKernel(size, sigma);
+    SuaveArgs* sArgs = (SuaveArgs*)args;
 
-    for(int x = 0; x < info->alto; x++){
-        for (int y = 0; y < info->ancho; y++){
-            for (int c = 0; c < info->canales; c++){
+    int mitad = sArgs->size / 2;
+
+    float *kernel = crearKernel(sArgs->size, sArgs->sigma);
+
+    for(int x = sArgs->inicio; x < sArgs->fin; x++){
+        for (int y = 0; y < sArgs->ancho; y++){
+            for (int c = 0; c < sArgs->canales; c++){
 
                 double suma = 0;
 
                 for (int i = -mitad; i <= mitad; i++){
-                    int xi = clamp_i(x + i, 0, info->alto - 1);
+                    int xi = clamp_i(x + i, 0, sArgs->fin - 1);
 
                     for (int j = -mitad; j <= mitad; j++){
-                        int yj = clamp_i(y + j, 0, info->ancho - 1);
+                        int yj = clamp_i(y + j, 0, sArgs->ancho - 1);
 
-                        suma += info->pixeles[xi][yj][c] * kernel[(i + mitad) * size + (j + mitad)];
+                        suma += sArgs->pixeles[xi][yj][c] * kernel[(i + mitad) * sArgs->size + (j + mitad)];
                     }
                 }
 
                 if (suma < 0) suma = 0;
                 if (suma > 255) suma = 255;
 
-                info->pixeles[x][y][c] = (unsigned char) round(suma);
+                sArgs->pixeles[x][y][c] = (unsigned char) round(suma);
 
             }
         }
     }
     return NULL;
 }
+
+
+void suavizarImagenConcurrente(ImagenInfo* info, int size, float sigma){
+    if (!info->pixeles) {
+        printf("No hay imagen cargada.\n");
+        return;
+    }
+
+    const int numHilos = 2; // QUÉ: Número fijo de hilos para simplicidad.
+    pthread_t hilos[numHilos];
+    SuaveArgs args[numHilos];
+    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
+
+    for (int i = 0; i < numHilos; i++) {
+        args[i].pixeles = info->pixeles;
+        args[i].inicio = i * filasPorHilo;
+        args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
+        args[i].ancho = info->ancho;
+        args[i].alto = info->alto;
+        args[i].canales = info->canales;
+        args[i].size = size;
+        args[i].sigma = sigma;
+
+        if (pthread_create(&hilos[i], NULL, suavizarHilo, &args[i]) != 0) {
+            fprintf(stderr, "Error al crear hilo %d\n", i);
+            return;
+        }
+    }
+
+    
+
+    for (int i = 0; i < numHilos; i++) {
+        pthread_join(hilos[i], NULL);
+    }
+    printf("Rotación ajustada concurrentemente con %d hilos (%s).\n", numHilos,
+           info->canales == 1 ? "grises" : "RGB");
+}
+
 
 // QUÉ: Mostrar el menú interactivo.
 // CÓMO: Imprime opciones y espera entrada del usuario.
@@ -626,7 +678,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 while (getchar() != '\n');
-                suavizarConcurrente(&imagen, size, sigma);
+                suavizarImagenConcurrente(&imagen, size, sigma);
 
                 
 
