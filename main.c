@@ -365,8 +365,8 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
 void* escalarHilo (void* args) {
     EscalarArgs* scale = (EscalarArgs*)args;
     unsigned char *tempin, *tempout;
-    int nuevoAlto = scale->alto*ceil(scale->scale);
-    int nuevoAncho = scale->ancho*ceil(scale->scale);
+    int nuevoAlto = scale->alto*floor(scale->scale);
+    int nuevoAncho = scale->ancho*floor(scale->scale);
     int x_in, y_in;
     for(int i = 0; i < nuevoAlto; i++) {
         printf("una vuelta de i \n");
@@ -378,7 +378,7 @@ void* escalarHilo (void* args) {
             scale->pixeles[i][j] =  (unsigned char*) malloc(scale->canales * sizeof(unsigned char));
             for (int c = 0; c < scale->canales; c++) {   
                 scale->pixeles[i][j][c] = scale->pixelesViejos[y_in][x_in][c];
-                printf("%x" , scale->pixeles[i][j][c] );
+                //printf("%x" , scale->pixeles[i][j][c] );
             }
             
         }
@@ -419,8 +419,10 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
     for (int i = 0; i < numHilos; i++) {
         pthread_join(hilos[i], NULL);
     }
-    printf("Rotación ajustada concurrentemente con %d hilos (%s).\n", numHilos,
-           info->canales == 1 ? "grises" : "RGB");
+    printf("escalada con %d hilos (%s).\n", numHilos,info->canales == 1 ? "grises" : "RGB");
+    free(info->pixeles);
+    info->pixeles = args[0].pixeles;
+    
 }
 
 float* crearKernel(int size, float sigma){
