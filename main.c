@@ -370,12 +370,15 @@ void* escalarHilo (void* args) {
     int x_in, y_in;
     for(int i = 0; i < nuevoAlto; i++) {
         printf("una vuelta de i \n");
+        scale->pixeles[i] = (unsigned char**) malloc(scale->ancho * sizeof(unsigned char*));
         for(int j = 0; j < nuevoAncho; j++) {
             //printf("una vuelta de j \n");
             x_in = round((float)j / scale->scale);
             y_in = round((float)i / scale->scale);
+            scale->pixeles[i][j] =  (unsigned char*) malloc(scale->canales * sizeof(unsigned char));
             for (int c = 0; c < scale->canales; c++) {   
                 scale->pixeles[i][j][c] = scale->pixelesViejos[y_in][x_in][c];
+                printf("%x" , scale->pixeles[i][j][c] );
             }
             
         }
@@ -397,7 +400,7 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
 
     for (int i = 0; i < numHilos; i++) {
         args[i].pixelesViejos = info->pixeles;
-        args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)*ceil(scale)); 
+        args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)); 
         args[i].inicio = i * filasPorHilo;
         args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
         args[i].ancho = info->ancho;
@@ -422,7 +425,7 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
 
 float* crearKernel(int size, float sigma){
     int mitad = size / 2;
-    float *kernel = malloc(sizeof(float) * size*size);
+    float *kernel = (float*)malloc(sizeof(float) * size*size);
 
     float sum = 0;
     float s2 = 2 * sigma * sigma;
