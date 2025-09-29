@@ -485,6 +485,7 @@ void *suavizarConcurrente(ImagenInfo* info, int size, float sigma){
             }
         }
     }
+    return;
 }
 
 // QUÉ: Mostrar el menú interactivo.
