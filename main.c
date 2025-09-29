@@ -379,9 +379,10 @@ void* escalarHilo (void* args) {
     int nuevoAlto = floor((float)scale->alto*scale->scale);
     int nuevoAncho = floor((float)scale->ancho*scale->scale);
     int x_in, y_in;
+    scale->pixeles = (unsigned char***)malloc(nuevoAlto * sizeof(unsigned char**)); 
     for(int i = 0; i < nuevoAlto; i++) {
         printf("una vuelta de i \n");
-        scale->pixeles[i] = (unsigned char**) malloc(scale->ancho * sizeof(unsigned char*));
+        scale->pixeles[i] = (unsigned char**) malloc(nuevoAncho * sizeof(unsigned char*));
         for(int j = 0; j < nuevoAncho; j++) {
             //printf("una vuelta de j \n");
             x_in = round((float)j / scale->scale);
@@ -411,7 +412,7 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
 
     for (int i = 0; i < numHilos; i++) {
         args[i].pixelesViejos = info->pixeles;
-        args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)); 
+        //args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)); 
         args[i].inicio = i * filasPorHilo;
         args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
         args[i].ancho = info->ancho;
