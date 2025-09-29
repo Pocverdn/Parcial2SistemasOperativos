@@ -376,14 +376,14 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
 void* escalarHilo (void* args) {
     EscalarArgs* scale = (EscalarArgs*)args;
     unsigned char *tempin, *tempout;
-    //int nuevoAlto = floor((float)scale->alto*scale->scale);
-    //int nuevoAncho = floor((float)scale->ancho*scale->scale);
+    int nuevoAlto = floor((float)scale->alto*scale->scale);
+    int nuevoAncho = floor((float)scale->ancho*scale->scale);
     int x_in, y_in;
-    scale->pixeles = (unsigned char***)malloc(scale->alto * sizeof(unsigned char**)); 
-    for(int i = 0; i < scale->alto; i++) {
+    scale->pixeles = (unsigned char***)malloc(nuevoAlto * sizeof(unsigned char**)); 
+    for(int i = 0; i < nuevoAlto; i++) {
         printf("una vuelta de i \n");
-        scale->pixeles[i] = (unsigned char**) malloc(scale->ancho * sizeof(unsigned char*));
-        for(int j = 0; j < scale->ancho; j++) {
+        scale->pixeles[i] = (unsigned char**) malloc(nuevoAncho * sizeof(unsigned char*));
+        for(int j = 0; j < nuevoAncho; j++) {
             //printf("una vuelta de j \n");
             x_in = round((float)j / scale->scale);
             y_in = round((float)i / scale->scale);
@@ -415,8 +415,8 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
         //args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)); 
         args[i].inicio = i * filasPorHilo;
         args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
-        args[i].ancho = floor((float)info->alto*scale);
-        args[i].alto = floor((float)info->alto*scale);
+        args[i].ancho = info->ancho;
+        args[i].alto = info->alto;
         args[i].canales = info->canales;
         args[i].scale = scale;
 
