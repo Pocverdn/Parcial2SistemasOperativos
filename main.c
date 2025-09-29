@@ -376,8 +376,8 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
 void* escalarHilo (void* args) {
     EscalarArgs* scale = (EscalarArgs*)args;
     unsigned char *tempin, *tempout;
-    int nuevoAlto = scale->alto*floor(scale->scale);
-    int nuevoAncho = scale->ancho*floor(scale->scale);
+    int nuevoAlto = floor((float)scale->alto*scale->scale);
+    int nuevoAncho = floor((float)scale->ancho*scale->scale);
     int x_in, y_in;
     for(int i = 0; i < nuevoAlto; i++) {
         printf("una vuelta de i \n");
