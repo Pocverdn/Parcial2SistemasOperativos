@@ -412,6 +412,8 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
    /* info->ancho = floor((float)info->ancho*scale);
     info->alto =  floor((float)info->alto*scale);
 */
+    int anchoViejo = info->ancho;
+    int altoViejo = info->alto;
     info->ancho = round((float)info->ancho*scale);
     info->alto =  round((float)info->alto*scale);
     int filasPorHilo = (int)ceil((double)info->alto / numHilos);
@@ -441,9 +443,21 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
         pthread_join(hilos[i], NULL);
     }
     printf("escalada con %d hilos (%s).\n", numHilos,info->canales == 1 ? "grises" : "RGB");
+
+    //Tiene que ser aparte por el cambio de tamaño.
+    for (int i=0; i < altoViejo;i++) {
+        for (int j=0; j < anchoViejo;j++) {
+            
+            free(info->pixeles[i][j]);
+
+        }
+
+        free(info->pixeles[i]);
+    }
     free(info->pixeles);
     info->pixeles = args[0].pixeles;
-    
+
+    return; //:D    
 }
 
 float* crearKernel(int size, float sigma){
