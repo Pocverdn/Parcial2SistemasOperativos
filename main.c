@@ -379,8 +379,9 @@ void* escalarHilo (void* args) {
     //int nuevoAlto = floor((float)scale->alto*scale->scale);
     //int nuevoAncho = floor((float)scale->ancho*scale->scale);
     int x_in, y_in;
-    scale->pixeles = (unsigned char***)malloc(scale->alto * sizeof(unsigned char**)); 
-    for(int i = 0; i < scale->alto; i++) {
+    //scale->pixeles = (unsigned char***)malloc(scale->alto * sizeof(unsigned char**)); 
+    //for(int i = 0; i < scale->alto; i++) {
+    for(int i = scale->inicio; i < scale->fin; i++) {
         printf("una vuelta de i \n");
         scale->pixeles[i] = (unsigned char**) malloc(scale->ancho * sizeof(unsigned char*));
         for(int j = 0; j < scale->ancho; j++) {
@@ -405,16 +406,21 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
         return;
     }
 
-    const int numHilos = 1; // QUÉ: Número fijo de hilos para simplicidad.
+    const int numHilos = 2; // QUÉ: Número fijo de hilos para simplicidad.
     pthread_t hilos[numHilos];
     EscalarArgs args[numHilos];
-    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
-    info->ancho = floor((float)info->ancho*scale);
+   /* info->ancho = floor((float)info->ancho*scale);
     info->alto =  floor((float)info->alto*scale);
+*/
+    info->ancho = round((float)info->ancho*scale);
+    info->alto =  round((float)info->alto*scale);
+    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
+    unsigned char*** matrix = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)); 
+
 
     for (int i = 0; i < numHilos; i++) {
         args[i].pixelesViejos = info->pixeles;
-        //args[i].pixeles = (unsigned char***)malloc(info->alto * sizeof(unsigned char**)); 
+        args[i].pixeles = matrix; 
 
         args[i].ancho = info->ancho;
         args[i].alto = info->alto;
@@ -647,7 +653,7 @@ int main(int argc, char* argv[]) {
             }
             case 6: { // escalar imagen
                 float escala;
-                printf("Valor en porcentage cual quiere escalar su imagen: ");
+                printf("Valor (decimal) mayor que 0 y menor que 2 del porcentage al cual se quiere escalar su imagen: ");
                 if (scanf("%f", &escala) != 1) {
                     while (getchar() != '\n');
                     printf("Entrada inválida.\n");
