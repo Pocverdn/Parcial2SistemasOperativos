@@ -408,9 +408,12 @@ void escalarImagenConcurrente(ImagenInfo* info, float scale){
     const int numHilos = 1; // QUÉ: Número fijo de hilos para simplicidad.
     pthread_t hilos[numHilos];
     EscalarArgs args[numHilos];
-    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
-    info->ancho = floor((float)info->ancho*scale);
+   /* info->ancho = floor((float)info->ancho*scale);
     info->alto =  floor((float)info->alto*scale);
+*/
+    info->ancho = round((float)info->ancho*scale);
+    info->alto =  round((float)info->alto*scale);
+    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
 
     for (int i = 0; i < numHilos; i++) {
         args[i].pixelesViejos = info->pixeles;
@@ -647,7 +650,7 @@ int main(int argc, char* argv[]) {
             }
             case 6: { // escalar imagen
                 float escala;
-                printf("Valor en porcentage cual quiere escalar su imagen: ");
+                printf("Valor (decimal) mayor que 0 y menor que 2 del porcentage al cual se quiere escalar su imagen: ");
                 if (scanf("%f", &escala) != 1) {
                     while (getchar() != '\n');
                     printf("Entrada inválida.\n");
