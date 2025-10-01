@@ -34,11 +34,31 @@
 // POR QUÉ: Permite manejar tanto grises como color, con memoria dinámica para
 // flexibilidad y evitar desperdicio.
 typedef struct {
-    int ancho;           // Ancho de la imagen en píxeles
-    int alto;            // Alto de la imagen en píxeles
-    int canales;         // 1 (escala de grises) o 3 (RGB)// Matriz 3D: [alto][ancho][canales]
+    int ancho;          
+    int alto;           
+    int canales;       
     unsigned char*** pixeles;
 } ImagenInfo;
+
+unsigned char*** reservarMatriz(int alto, int ancho, int canales) {
+    unsigned char*** m = (unsigned char***) malloc(alto * sizeof(unsigned char**));
+    for (int y = 0; y < alto; y++) {
+        m[y] = (unsigned char**) malloc(ancho * sizeof(unsigned char*));
+        for (int x = 0; x < ancho; x++) {
+            m[y][x] = (unsigned char*) malloc(canales * sizeof(unsigned char));
+        }
+    }
+    return m;
+}
+void liberarMatriz(unsigned char*** m, int alto, int ancho) {
+    for (int y = 0; y < alto; y++) {
+        for (int x = 0; x < ancho; x++) {
+            free(m[y][x]);
+        }
+        free(m[y]);
+    }
+    free(m);
+}
 
 // QUÉ: Liberar memoria asignada para la imagen.
 // CÓMO: Libera cada fila y canal de la matriz 3D, luego el arreglo de filas y
@@ -140,6 +160,8 @@ void mostrarMatriz(const ImagenInfo* info) {
     }
 }
 
+
+
 // QUÉ: Guardar la matriz como PNG (grises o RGB).
 // CÓMO: Aplana la matriz 3D a 1D y usa stbi_write_png con el número de canales correcto.
 // POR QUÉ: Respeta el formato original (grises o RGB) para consistencia.
@@ -195,14 +217,45 @@ typedef struct {
 
 
 typedef struct {
+    unsigned char*** origen;
+    unsigned char*** destino;
+    int ancho;
+    int alto;
+    int newAncho;
+    int newAlto;
+    int canales;
+    float cosA;
+    float sinA;
+    float cx, cy;
+    float ncx, ncy;
     int inicio;
     int fin;
-    int ancho;           // Ancho de la imagen en píxeles
-    int alto;
-    int canales;         // 1 (escala de grises) o 3 (RGB)
-    unsigned char*** pixeles; // Matriz 3D: [alto][ancho][canales]
-    float angulo;
 } RotarArgs;
+
+
+
+typedef struct {
+    unsigned char*** origen;
+    unsigned char*** destino;
+    int ancho;
+    int alto;
+    int canales;
+    int inicio;
+    int fin;
+} SobelArgs;
+
+static const int Gx[3][3] = {
+    {-1, 0, 1},
+    {-2, 0, 2},
+    {-1, 0, 1}
+};
+
+static const int Gy[3][3] = {
+    {-1, -2, -1},
+    { 0,  0,  0},
+    { 1,  2,  1}
+};
+
 
 typedef struct {
     int inicio;
@@ -287,73 +340,83 @@ void ajustarBrilloConcurrente(ImagenInfo* info, int delta) {
 // QUÉ: Rotar la matriz de píceles (primeras 10 filas)
 // CÓMO: Rotandola
 // POR QUÉ: El profe lo pidio
-void* rotarImagenHilo(void* args) {
+void* rotarImagenHilo(void* arg) {
+    RotarArgs* args = (RotarArgs*)arg;
 
-    RotarArgs* rArgs = (RotarArgs*)args;
+    for (int y = args->inicio; y < args->fin; y++) {
+        for (int x = 0; x < args->newAncho; x++) {
 
-    float radianes = rArgs->angulo * (M_PI/180);
+            // Transformación inversa (del nuevo espacio a la imagen original)
+            float xt = x - args->ncx;
+            float yt = y - args->ncy;
 
-    float cose = cos(radianes);
-    float sen = sin(radianes);
+            int xi = (int)roundf(xt * args->cosA + yt * args->sinA + args->cx);
+            int yi = (int)roundf(-xt * args->sinA + yt * args->cosA + args->cy);
 
-    float centroX = rArgs->ancho / 2;
-    float centroY = rArgs->alto / 2;
-
-    // Creo una copia de la imagen
-    unsigned char*** copia = (unsigned char***) malloc(rArgs->alto * sizeof(unsigned char**));
-    for (int y = 0; y < rArgs->alto; y++) {
-        copia[y] = (unsigned char**) malloc(rArgs->ancho * sizeof(unsigned char*));
-        for (int x = 0; x < rArgs->ancho; x++) {
-            copia[y][x] = (unsigned char*) malloc(rArgs->canales * sizeof(unsigned char));
-            for (int c = 0; c < rArgs->canales; c++) {
-                copia[y][x][c] = rArgs->pixeles[y][x][c];
-            }
-        }
-    }
-
-    for (int y = rArgs->inicio; y < rArgs->fin; y++) {
-        for (int x = 0; x < rArgs->ancho; x++) {
-            float xt = x - centroX;
-            float yt = y - centroY;
-
-            int xr = (int) round(xt * cose - yt * sen + centroX);
-            int yr = (int) round(xt * sen + yt * cose + centroY);
-
-            for (int c = 0; c < rArgs->canales; c++) {
-                if (xr >= 0 && xr < rArgs->ancho && yr >= 0 && yr < rArgs->alto) {
-                    rArgs->pixeles[y][x][c] = copia[yr][xr][c];
-                } else {
-                    rArgs->pixeles[y][x][c] = 0; // negro
+            if (xi >= 0 && xi < args->ancho && yi >= 0 && yi < args->alto) {
+                // Copiar píxeles válidos desde la imagen original
+                for (int c = 0; c < args->canales; c++) {
+                    args->destino[y][x][c] = args->origen[yi][xi][c];
+                }
+            } else {
+                // Rellenar con negro si cae fuera
+                for (int c = 0; c < args->canales; c++) {
+                    args->destino[y][x][c] = 0;
                 }
             }
         }
     }
 
     return NULL;
-
-    
 }
 
 
-void rotarImagenConcurrente(ImagenInfo* info, float angulo){
+
+
+void rotarImagenConcurrente(ImagenInfo* info, float angulo, int numHilos) {
     if (!info->pixeles) {
         printf("No hay imagen cargada.\n");
         return;
     }
 
-    const int numHilos = 2; // QUÉ: Número fijo de hilos para simplicidad.
+    float rad = angulo * M_PI / 180.0f;
+    float cosA = cos(rad);
+    float sinA = sin(rad);
+
+    int w = info->ancho;
+    int h = info->alto;
+
+    // calcular bounding box
+    int newW = (int)ceil(fabs(w * cosA) + fabs(h * sinA));
+    int newH = (int)ceil(fabs(w * sinA) + fabs(h * cosA));
+
+    float cx = w / 2.0f;
+    float cy = h / 2.0f;
+    float ncx = newW / 2.0f;
+    float ncy = newH / 2.0f;
+
+    unsigned char*** nueva = reservarMatriz(newH, newW, info->canales);
+
     pthread_t hilos[numHilos];
     RotarArgs args[numHilos];
-    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
+    int filasPorHilo = (int)ceil((double)newH / numHilos);
 
     for (int i = 0; i < numHilos; i++) {
-        args[i].pixeles = info->pixeles;
-        args[i].inicio = i * filasPorHilo;
-        args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
-        args[i].ancho = info->ancho;
-        args[i].alto = info->alto;
+        args[i].origen = info->pixeles;
+        args[i].destino = nueva;
+        args[i].ancho = w;
+        args[i].alto = h;
+        args[i].newAncho = newW;
+        args[i].newAlto = newH;
         args[i].canales = info->canales;
-        args[i].angulo = angulo;
+        args[i].cosA = cosA;
+        args[i].sinA = sinA;
+        args[i].cx = cx;
+        args[i].cy = cy;
+        args[i].ncx = ncx;
+        args[i].ncy = ncy;
+        args[i].inicio = i * filasPorHilo;
+        args[i].fin = (i + 1) * filasPorHilo < newH ? (i + 1) * filasPorHilo : newH;
 
         if (pthread_create(&hilos[i], NULL, rotarImagenHilo, &args[i]) != 0) {
             fprintf(stderr, "Error al crear hilo %d\n", i);
@@ -361,15 +424,115 @@ void rotarImagenConcurrente(ImagenInfo* info, float angulo){
         }
     }
 
-    
+    for (int i = 0; i < numHilos; i++) {
+        pthread_join(hilos[i], NULL);
+    }
+
+    // liberar imagen original
+    liberarMatriz(info->pixeles, info->alto, info->ancho);
+
+    // asignar nueva
+    info->pixeles = nueva;
+    info->ancho = newW;
+    info->alto = newH;
+
+    printf("Rotación %.1f° concurrente con %d hilos. Nuevo tamaño: %d x %d\n",
+           angulo, numHilos, newW, newH);
+}
+
+// 
+
+void* sobelHilo(void* args) {
+    SobelArgs* sArgs = (SobelArgs*)args;
+
+    for (int y = sArgs->inicio; y < sArgs->fin; y++) {
+        for (int x = 0; x < sArgs->ancho; x++) {
+            double sumX = 0.0, sumY = 0.0;
+
+            // aplicar sobel en vecindad
+            for (int ky = -1; ky <= 1; ky++) {
+                for (int kx = -1; kx <= 1; kx++) {
+                    int ny = y + ky;
+                    int nx = x + kx;
+                    if (ny >= 0 && ny < sArgs->alto && nx >= 0 && nx < sArgs->ancho) {
+                        int valor;
+                        if (sArgs->canales == 1) {
+                            valor = sArgs->origen[ny][nx][0];
+                        } else {
+                            valor = (sArgs->origen[ny][nx][0] +
+                                     sArgs->origen[ny][nx][1] +
+                                     sArgs->origen[ny][nx][2]) / 3;
+                        }
+                        sumX += valor * Gx[ky + 1][kx + 1];
+                        sumY += valor * Gy[ky + 1][kx + 1];
+                    }
+                }
+            }
+
+            int mag = (int)(sqrt(sumX * sumX + sumY * sumY));
+            if (mag > 255) mag = 255;
+            if (mag < 0) mag = 0;
+
+            for (int c = 0; c < sArgs->canales; c++) {
+                sArgs->destino[y][x][c] = (unsigned char)mag;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+void deteccionBordesConcurrente(ImagenInfo* info, int numHilos) {
+    if (!info->pixeles) {
+        printf("No hay imagen cargada.\n");
+        return;
+    }
+
+    // reservar nueva matriz destino
+    unsigned char*** nueva = (unsigned char***) malloc(info->alto * sizeof(unsigned char**));
+    for (int y = 0; y < info->alto; y++) {
+        nueva[y] = (unsigned char**) malloc(info->ancho * sizeof(unsigned char*));
+        for (int x = 0; x < info->ancho; x++) {
+            nueva[y][x] = (unsigned char*) malloc(info->canales * sizeof(unsigned char));
+        }
+    }
+
+    pthread_t hilos[numHilos];
+    SobelArgs args[numHilos];
+    int filasPorHilo = (int)ceil((double)info->alto / numHilos);
+
+    for (int i = 0; i < numHilos; i++) {
+        args[i].origen = info->pixeles;
+        args[i].destino = nueva;
+        args[i].ancho = info->ancho;
+        args[i].alto = info->alto;
+        args[i].canales = info->canales;
+        args[i].inicio = i * filasPorHilo;
+        args[i].fin = (i + 1) * filasPorHilo < info->alto ? (i + 1) * filasPorHilo : info->alto;
+
+        if (pthread_create(&hilos[i], NULL, sobelHilo, &args[i]) != 0) {
+            fprintf(stderr, "Error al crear hilo %d\n", i);
+            return;
+        }
+    }
 
     for (int i = 0; i < numHilos; i++) {
         pthread_join(hilos[i], NULL);
     }
-    printf("Rotación ajustada concurrentemente con %d hilos (%s).\n", numHilos,
-           info->canales == 1 ? "grises" : "RGB");
-}
 
+    for (int y = 0; y < info->alto; y++) {
+        for (int x = 0; x < info->ancho; x++) {
+            free(info->pixeles[y][x]);
+        }
+        free(info->pixeles[y]);
+    }
+    free(info->pixeles);
+
+    info->pixeles = nueva;
+
+    printf("Detección de bordes aplicada concurrentemente con %d hilos.\n", numHilos);
+}
+//
 // QUÉ: Escalar la matriz de píceles (primeras 10 filas)
 // CÓMO: Escalandola
 // POR QUÉ: El profe lo pidio
@@ -662,7 +825,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 while (getchar() != '\n');
-                rotarImagenConcurrente(&imagen, angulo);
+                rotarImagenConcurrente(&imagen, angulo, 2);
                 break;
             }
             case 6: { // escalar imagen
